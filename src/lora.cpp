@@ -84,7 +84,7 @@ bool Frame_ParseFromPacket(Packet_t packet, Frame_t *frame)
     {
         // get cmd
         frame->commands[iCommand].cmd = packet.payload[iPayload];
-        frame->commands[iCommand].dataSize = Config_GetSizeByCmd(frame->commands[iCommand].cmd);
+        frame->commands[iCommand].dataSize = Config_GetInfoByCmd(frame->commands[iCommand].cmd).size;
         iPayload++;
 
         // valid dataSize

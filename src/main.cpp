@@ -4,22 +4,21 @@
 #include <PubSubClient.h>
 #include <Preferences.h>
 
+#include "utils.h"
 #include "lora.h"
 
 WiFiClient espClient;
 PubSubClient mqttClient(espClient);
 Preferences preferences;
 
-#define EEPROM_SIZE 512       // Kich thuoc EEPROM
-#define JSON_SIZE (10 * 1024) // Kich thuoc JSON
-
 #define MQTT_BROKER_DEFAULT "broker.emqx.io"
 #define MQTT_PORT_DEFAULT 1883
 
-#define MQTT_PULISH_TOPIC_FORWARD ("gw/" + String(GATEWAY_MAC) + "/upforward")
-#define MQTT_SUBSCRIBE_TOPIC_FORWARD ("gw/" + String(GATEWAY_MAC) + "/downforward")
-#define MQTT_PULISH_TOPIC_CONFIG ("gw/" + String(GATEWAY_MAC) + "/upconfig")
-#define MQTT_SUBSCRIBE_TOPIC_CONFIG ("gw/" + String(GATEWAY_MAC) + "/downconfig")
+#define MQTT_PULISH_TOPIC_RESOURCES ("gw/" + String(GATEWAY_MAC) + "/report/resources")
+#define MQTT_SUBSCRIBE_TOPIC_GET_RESOUCES ("gw/" + String(GATEWAY_MAC) + "/get/resources")
+#define MQTT_SUBSCRIBE_TOPIC_SET_RESOUCES ("gw/" + String(GATEWAY_MAC) + "/set/resources")
+#define MQTT_PULISH_TOPIC_DEVLIST ("gw/" + String(GATEWAY_MAC) + "/report/devlist")
+#define MQTT_SUBSCRIBE_TOPIC_DEVLIST ("gw/" + String(GATEWAY_MAC) + "/set/devlist")
 
 String devIds[MAX_DEVICES]; // Mảng lưu devId
 int devIdCount = 0;         // Số lượng thiết bị hiện tại
@@ -35,8 +34,6 @@ void readConfig(Config &config);
 void saveConfig(const Config &config);
 void connectMQTT(const Config &config);
 void pushDevIdsToConfigTopic();
-void frameToJson(const Frame_t &frame, String &jsonStr);
-bool jsonToFrame(const String &jsonStr, Frame_t &frame);
 
 void loadDevIds();
 void saveDevIds();
@@ -46,7 +43,6 @@ void setup()
   Serial.begin(115200);
   delay(1000);
   loadDevIds();
-  Config_Init();
   Lora_Init();
   Config config;
 
@@ -124,13 +120,13 @@ void loop()
     }
     else
     {
-      String jsonStr;
-      frameToJson(frame, jsonStr);
-
       if (mqttClient.connected())
       {
-        mqttClient.publish((MQTT_PULISH_TOPIC_FORWARD + "/" + devIdStr).c_str(), jsonStr.c_str());
-        Serial.println("Publish: " + (MQTT_PULISH_TOPIC_FORWARD + "/" + devIdStr));
+        String jsonStr;
+        frameToJson(frame, jsonStr);
+
+        mqttClient.publish((MQTT_PULISH_TOPIC_RESOURCES + "/" + devIdStr).c_str(), jsonStr.c_str());
+        Serial.println("Publish: " + (MQTT_PULISH_TOPIC_RESOURCES + "/" + devIdStr));
         Serial.println(jsonStr);
       }
     }
@@ -210,11 +206,13 @@ void connectMQTT(const Config &config)
     String clientID = "LoraWifiGW_" + String(random(1000, 9999));
     if (mqttClient.connect(clientID.c_str()))
     {
-      mqttClient.subscribe(MQTT_SUBSCRIBE_TOPIC_CONFIG.c_str());
-      mqttClient.subscribe(MQTT_SUBSCRIBE_TOPIC_FORWARD.c_str());
+      mqttClient.subscribe(MQTT_SUBSCRIBE_TOPIC_DEVLIST.c_str());
+      mqttClient.subscribe(MQTT_SUBSCRIBE_TOPIC_GET_RESOUCES.c_str());
+      mqttClient.subscribe(MQTT_SUBSCRIBE_TOPIC_SET_RESOUCES.c_str());
       Serial.println("Da ket noi MQTT");
-      Serial.printf("Subscribe topic:%s\n", MQTT_SUBSCRIBE_TOPIC_CONFIG.c_str());
-      Serial.printf("Subscribe topic:%s\n", MQTT_SUBSCRIBE_TOPIC_FORWARD.c_str());
+      Serial.printf("Subscribe topic:%s\n", MQTT_SUBSCRIBE_TOPIC_DEVLIST.c_str());
+      Serial.printf("Subscribe topic:%s\n", MQTT_SUBSCRIBE_TOPIC_GET_RESOUCES.c_str());
+      Serial.printf("Subscribe topic:%s\n", MQTT_SUBSCRIBE_TOPIC_SET_RESOUCES.c_str());
       pushDevIdsToConfigTopic();
     }
     else
@@ -226,91 +224,21 @@ void connectMQTT(const Config &config)
   }
 }
 
+// Hàm gửi danh sách devId qua MQTT
 void pushDevIdsToConfigTopic()
 {
-  StaticJsonDocument<JSON_SIZE> doc;
-  JsonArray array = doc.createNestedArray("devIds");
-
-  for (int i = 0; i < devIdCount; i++)
-  {
-    array.add(devIds[i]);
-  }
-
   String jsonStr;
-  serializeJson(doc, jsonStr);
+  convertConfigToJson(devIds, devIdCount, jsonStr); // Chuyển đổi danh sách devId thành JSON
 
   if (mqttClient.connected())
   {
-    mqttClient.publish(MQTT_PULISH_TOPIC_CONFIG.c_str(), jsonStr.c_str());
+    mqttClient.publish(MQTT_PULISH_TOPIC_DEVLIST.c_str(), jsonStr.c_str());
     Serial.println("Publish: " + jsonStr);
   }
   else
   {
-    Serial.println("Loi: MQTT chua ket noi, khong the gui danh sach devIds");
+    Serial.println("Lỗi: MQTT chưa kết nối, không thể gửi danh sách devIds");
   }
-}
-
-void frameToJson(const Frame_t &frame, String &jsonStr)
-{
-  ArduinoJson::StaticJsonDocument<JSON_SIZE> doc;
-
-  // Chuyển devId sang chuỗi HEX (viết hoa)
-  char devIdStr[13]; // 12 ký tự HEX + null terminator
-  sprintf(devIdStr, "%012llX", frame.devId);
-  doc["devId"] = devIdStr;
-
-  JsonArray commandsArray = doc.createNestedArray("commands");
-  for (uint8_t i = 0; i < frame.commandSize; i++)
-  {
-    JsonObject cmdObj = commandsArray.createNestedObject();
-    cmdObj["cmd"] = frame.commands[i].cmd;
-
-    JsonArray dataArray = cmdObj.createNestedArray("data");
-    for (uint8_t j = 0; j < frame.commands[i].dataSize; j++)
-    {
-      dataArray.add(frame.commands[i].data[j]);
-    }
-  }
-
-  serializeJson(doc, jsonStr); // Xuất ra chuỗi JSON
-}
-
-bool jsonToFrame(const String &jsonStr, Frame_t &frame)
-{
-  ArduinoJson::StaticJsonDocument<JSON_SIZE> doc;
-  DeserializationError error = deserializeJson(doc, jsonStr);
-  if (error)
-  {
-    Serial.println("Loi JSON");
-    return false;
-  }
-
-  // Chuyển devId từ HEX string sang uint64_t
-  const char *devIdStr = doc["devId"];
-  frame.devId = strtoull(devIdStr, NULL, 16); // Chuyển HEX string thành uint64_t
-
-  JsonArray commandsArray = doc["commands"];
-  frame.commandSize = min((uint8_t)commandsArray.size(), (uint8_t)MAX_COMMAND_SIZE);
-
-  for (uint8_t i = 0; i < frame.commandSize; i++)
-  {
-    JsonObject cmdObj = commandsArray[i];
-    frame.commands[i].cmd = cmdObj["cmd"];
-
-    JsonArray dataArray = cmdObj["data"];
-    if (dataArray.size() != Config_GetSizeByCmd(frame.commands[i].cmd))
-    {
-      Serial.printf("Error: Size cmd invalid: %d vs %d\n", dataArray.size(), Config_GetSizeByCmd(frame.commands[i].cmd));
-      return false;
-    }
-    frame.commands[i].dataSize = Config_GetSizeByCmd(frame.commands[i].cmd);
-    for (uint8_t j = 0; j < frame.commands[i].dataSize; j++)
-    {
-      frame.commands[i].data[j] = dataArray[j];
-    }
-  }
-
-  return true;
 }
 
 // Hàm lưu devId vào Flash
@@ -367,54 +295,53 @@ void loadDevIds()
 void mqttCallback(char *topic, byte *payload, unsigned int length)
 {
   Serial.println("Nhan du lieu MQTT tu topic: " + String(topic));
+  String jsonStr = String((char *)payload).substring(0, length);
+  Serial.println(jsonStr);
 
-  if (String(topic) == MQTT_SUBSCRIBE_TOPIC_CONFIG)
+  if (String(topic) == MQTT_SUBSCRIBE_TOPIC_DEVLIST)
   {
-    String message;
-    for (unsigned int i = 0; i < length; i++)
+    if (convertJsonToConfig(jsonStr, devIds, devIdCount, MAX_DEVICES))
     {
-      message += (char)payload[i];
-    }
-    Serial.println("Noi dung: " + message);
-
-    // Parse JSON
-    StaticJsonDocument<512> doc;
-    DeserializationError error = deserializeJson(doc, message);
-    if (error)
-    {
-      Serial.println("Loi parse JSON");
-      return;
-    }
-
-    JsonArray array = doc["devIds"];
-    devIdCount = 0;
-
-    for (JsonVariant value : array)
-    {
-      if (devIdCount < MAX_DEVICES)
+      Serial.println("Danh sách thiết bị:");
+      for (int i = 0; i < devIdCount; i++)
       {
-        devIds[devIdCount] = value.as<String>();
-        devIdCount++;
+        Serial.println(devIds[i]);
       }
-      else
-      {
-        break; // Giới hạn số lượng thiết bị
-      }
-    }
 
-    // Lưu vào flash
-    saveDevIds();
+      // Lưu vào flash
+      saveDevIds();
+    }
+    else
+    {
+      Serial.println("Chuyển đổi JSON thất bại!");
+    }
   }
-  else if (String(topic) == MQTT_SUBSCRIBE_TOPIC_FORWARD)
+  else if (String(topic) == MQTT_SUBSCRIBE_TOPIC_SET_RESOUCES)
   {
-    String jsonStr = String((char*)payload).substring(0, length); 
     Frame_t frame;
     Serial.println(jsonStr);
     // Gọi jsonToFrame() để xử lý JSON
-    if (jsonToFrame(jsonStr, frame)) {
-        Lora_Send(frame);
-    } else {
-        Serial.println("Failed to parse JSON.");
+    if (jsonToFrame(jsonStr, frame, false))
+    {
+      Lora_Send(frame);
+    }
+    else
+    {
+      Serial.println("Failed to parse JSON.");
+    }
+  }
+  else if (String(topic) == MQTT_SUBSCRIBE_TOPIC_GET_RESOUCES)
+  {
+    Frame_t frame;
+    Serial.println(jsonStr);
+    // Gọi jsonToFrame() để xử lý JSON
+    if (jsonToFrame(jsonStr, frame, true))
+    {
+      Lora_Send(frame);
+    }
+    else
+    {
+      Serial.println("Failed to parse JSON.");
     }
   }
 }

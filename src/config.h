@@ -10,24 +10,35 @@
 #define LORA_RX 16  // Chân RX của LoRa kết nối với TX ESP32
 #define LORA_TX 17  // Chân TX của LoRa kết nối với RX ESP32
 
-// ================ List CMD ==================
-typedef enum
-{
-    TemperatureReport = 0x11,
-    HumidityReport = 0x12,
-    SoilReport = 0x13,
-    LuxReport = 0x14,
+typedef enum {
+    Report = 0,
+    Get,
+    Set
+} ResourceType_t;
 
-    Relay1Report = 0x30,
-    Relay1Get = 0x31,
-    Relay1Set = 0x32,
+typedef enum {
+    Bool = 0,
+    Int8,
+    Uint8,
+    Int16,
+    Uint16,
+    Int32,
+    Uint32,
+    Int64,
+    Uint64,
+    Float,
+    Double,
+    Array
+} ValueType_t;
 
-    Relay2Report = 0x33,
-    Relay2Get = 0x34,
-    Relay2Set = 0x35
-} Cmd_t;
+typedef struct {
+    String name;
+    ValueType_t type;
+    uint8_t size;
+    uint8_t cmds[3];   // report, get, set
+} ResourceInfo_t;
 
-void Config_Init();
-int8_t Config_GetSizeByCmd(uint8_t cmd);
+ResourceInfo_t Config_GetInfoByCmd(uint8_t cmd);
+ResourceInfo_t Config_GetInfoByName(String name);
 
 #endif

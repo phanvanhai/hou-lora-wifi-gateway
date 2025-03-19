@@ -5,7 +5,7 @@
 #include "config.h"
 
 #define MAX_COMMAND_SIZE 10
-#define MAX_COMMAND_DATA_SIZE 256
+#define MAX_COMMAND_DATA_SIZE 10
 
 typedef struct
 {
