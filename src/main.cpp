@@ -56,7 +56,7 @@ void setup()
   wm.addParameter(&mqttBrokerParam);
   wm.addParameter(&mqttPortParam);
 
-  if (!wm.autoConnect("Gateway_Config", "12345678"))
+  if (!wm.autoConnect("GatewayConfig", "12345678"))
   {
     Serial.println("Ket noi WiFi that bai, khoi dong lai!");
     ESP.restart();
@@ -74,7 +74,7 @@ void setup()
 }
 
 Frame_t test_frame = {
-    .devId = 0xAABBCCDDEE01,
+    .devId = 0xAABBCCDDEE02,
     .commands = {
         {0x11, {30}, 1},
         {0x12, {80}, 1},
@@ -84,7 +84,7 @@ Frame_t test_frame = {
         {0x33, {0}, 1}},
     .commandSize = 6};
 unsigned long previousMillis = 0;
-const long interval = 3000; // 3 giây
+const long interval = 1000; // 3 giây
 unsigned long currentMillis = 0;
 
 void loop()

@@ -1,0 +1,22 @@
+GW subscribe:
+gw/001122334455/report/resources/#
+gw/001122334455/report/devlist
+
+1. Cấu hình danh sách thiết bị:
+
+gw/001122334455/set/devlist
+
+{ "devIds": ["AABBCCDDEE01", "AABBCCDDEE02", "AABBCCDDEE03"] }
+
+
+2. Đọc trạng thái Relay1:
+
+gw/001122334455/get/resources
+
+{"devId":"AABBCCDDEE01","resources":["Relay1","Relay2"]}
+
+
+3. Đặt trạng thái Relay1:
+gw/001122334455/set/resources
+
+{"devId":"AABBCCDDEE01","resources":{"Relay1":true,"Relay2":false}}

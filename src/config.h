@@ -7,8 +7,8 @@
 
 #define MAX_DEVICES 100     // So luong toi da thiet bi duoc quan ly boi Gateway
 
-#define LORA_RX 16  // Chân RX của LoRa kết nối với TX ESP32
-#define LORA_TX 17  // Chân TX của LoRa kết nối với RX ESP32
+#define LORA_RX 17  // Chân RX của LoRa kết nối với TX ESP32
+#define LORA_TX 16  // Chân TX của LoRa kết nối với RX ESP32
 
 typedef enum {
     Report = 0,

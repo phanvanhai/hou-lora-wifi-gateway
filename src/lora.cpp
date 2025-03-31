@@ -36,7 +36,7 @@ HardwareSerial LoRaSerial(2);
 
 void Lora_Init()
 {
-    LoRaSerial.begin(9600, SERIAL_8N1, LORA_RX, LORA_TX);
+    LoRaSerial.begin(9600, SERIAL_8N1, LORA_TX, LORA_RX);
 }
 
 void Lora_Send(Frame_t frame)
